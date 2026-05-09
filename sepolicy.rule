@@ -1,0 +1,2 @@
+allow untrusted_app vendor_soterservice_service:service_manager find;
+allow untrusted_app_2 vendor_soterservice_service:service_manager find;

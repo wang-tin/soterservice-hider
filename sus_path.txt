@@ -1,0 +1,9 @@
+# Hide Paths Configuration
+# Format: <path> <options>
+# Options: empty (hide immediately) or <retry_seconds>
+# Example:
+# /system_ext/app/SoterService
+# /system/addon.d
+# /vendor/bin/install-recovery.sh 5
+
+/system_ext/app/SoterService

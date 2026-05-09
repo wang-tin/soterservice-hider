@@ -1,0 +1,8 @@
+# Sus Mount Configuration
+# Paths to be bound to /dev/null for hiding
+# Format: <path>
+# Example:
+# /system_ext
+# /data/adb/modules
+
+/system_ext/app/SoterService
