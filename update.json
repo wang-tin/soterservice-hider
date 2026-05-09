@@ -1,6 +1,6 @@
 {
-  "version": "1.7",
-  "versionCode": 8,
-  "zipUrl": "https://github.com/wang-tin/soterservice-hider/releases/download/v1.7/soterservice_hider.zip",
-  "changelog": "v1.7 - Improved path hiding mechanism\n- Added SELinux support\n- Multiple bind mount fallback methods\n- Retry mechanism for path hiding"
+  "version": "1.8",
+  "versionCode": 9,
+  "zipUrl": "https://github.com/wang-tin/soterservice-hider/releases/download/v1.8/soterservice_hider.zip",
+  "changelog": "v1.8 - 添加日志记录和状态检测\n- 添加详细日志记录到 /data/adb/soter_hider.log\n- 添加 check_status.sh 状态检测脚本\n- 改进挂载逻辑和错误处理"
 }

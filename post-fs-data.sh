@@ -3,9 +3,16 @@
 MODDIR=${0%/*}
 CONFIG_FILE="$MODDIR/sus_path.txt"
 EMPTY_DIR="$MODDIR/empty"
+LOG_FILE="/data/adb/soter_hider.log"
 
 mkdir -p "$EMPTY_DIR"
 chmod 755 "$EMPTY_DIR"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+}
+
+log "=== SoterService Hider started ==="
 
 setenforce 0 2>/dev/null
 
@@ -22,6 +29,7 @@ hide_path() {
     done
     
     if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+        log "Path not exists: $target"
         echo "[SoterHider] Path not exists: $target"
         return 1
     fi
@@ -40,6 +48,7 @@ hide_path() {
         fi
         
         if [ $mount_result -eq 0 ] && mount | grep -q "$target"; then
+            log "Successfully hidden directory: $target"
             echo "[SoterHider] Hidden directory: $target"
             return 0
         fi
@@ -48,15 +57,18 @@ hide_path() {
         mount_result=$?
         
         if [ $mount_result -eq 0 ] && mount | grep -q "$target"; then
+            log "Successfully hidden file: $target"
             echo "[SoterHider] Hidden file: $target"
             return 0
         fi
     fi
     
+    log "Failed to hide: $target"
     return 1
 }
 
 if [ -f "$CONFIG_FILE" ]; then
+    log "Reading config file: $CONFIG_FILE"
     while IFS= read -r line || [ -n "$line" ]; do
         line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         
@@ -72,9 +84,13 @@ if [ -f "$CONFIG_FILE" ]; then
         fi
         
         if [ -n "$target_path" ] && [ "${target_path:0:1}" = "/" ]; then
+            log "Processing path: $target_path (retries: $retry_count)"
             hide_path "$target_path" "$retry_count"
         fi
     done < "$CONFIG_FILE"
+else
+    log "Config file not found: $CONFIG_FILE"
 fi
 
 setenforce 1 2>/dev/null
+log "=== SoterService Hider completed ==="
