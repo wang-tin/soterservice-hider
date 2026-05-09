@@ -36,6 +36,10 @@
         code { background: #16213e; padding: 2px 6px; border-radius: 4px; }
         .error { color: #e94560; }
         .success { color: #00ff88; }
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #16213e; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: none; z-index: 1000; }
+        .toast.show { display: block; }
+        .toast.error { border-left: 4px solid #e94560; }
+        .toast.success { border-left: 4px solid #00ff88; }
     </style>
 </head>
 <body>
@@ -86,10 +90,22 @@
         </div>
     </div>
 
+    <div class="toast" id="toast"></div>
+
     <script>
         var MODULE_ID = 'soterservice_hider';
         var MODULE_DIR = '/data/adb/modules/' + MODULE_ID;
         var CONFIG_FILE = MODULE_DIR + '/sus_path.txt';
+        var CONFIG_SCRIPT = MODULE_DIR + '/config.sh';
+        
+        function showToast(message, type) {
+            var toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show ' + type;
+            setTimeout(function() {
+                toast.className = 'toast';
+            }, 3000);
+        }
         
         function loadPaths() {
             var pathList = document.getElementById('pathList');
@@ -216,76 +232,145 @@
             var newPath = input.value.trim();
             
             if (!newPath) {
-                alert('请输入路径');
+                showToast('请输入路径', 'error');
                 return;
             }
             
             if (!newPath.startsWith('/')) {
-                alert('路径必须以 / 开头，例如: /system_ext/app/SoterService');
+                showToast('路径必须以 / 开头', 'error');
                 return;
             }
             
-            var cmd = 'echo "' + newPath + '" >> ' + CONFIG_FILE;
+            var methods = [
+                function(cb) { tryKsuevalAdd(newPath, cb); },
+                function(cb) { tryExecCommandAdd(newPath, cb); },
+                function(cb) { tryHttpAdd(newPath, cb); }
+            ];
             
-            tryKsuevalExec(cmd, function(success) {
+            tryNextMethodWithPath(methods, 0, newPath, input);
+        }
+        
+        function tryNextMethodWithPath(methods, index, path, input) {
+            if (index >= methods.length) {
+                showToast('无法添加路径，请手动编辑配置文件', 'error');
+                return;
+            }
+            
+            methods[index](function(success) {
                 if (success) {
-                    alert('路径已添加: ' + newPath + '\n请重启设备生效');
+                    showToast('路径已添加: ' + path, 'success');
                     input.value = '';
                     loadPaths();
                 } else {
-                    tryExecCommandExec(cmd, function(success2) {
-                        if (success2) {
-                            alert('路径已添加: ' + newPath + '\n请重启设备生效');
-                            input.value = '';
-                            loadPaths();
-                        } else {
-                            alert('请手动编辑配置文件:\n' + CONFIG_FILE);
-                        }
-                    });
+                    tryNextMethodWithPath(methods, index + 1, path, input);
                 }
             });
         }
         
-        function tryKsuevalExec(cmd, callback) {
-            if (typeof ksueval === 'function') {
-                ksueval(cmd, function() {
-                    callback(true);
-                });
-            } else {
+        function tryKsuevalAdd(path, callback) {
+            if (typeof ksueval !== 'function') {
                 callback(false);
+                return;
             }
+            ksueval('sh ' + CONFIG_SCRIPT + ' add "' + path + '"', function(result) {
+                if (result && result.indexOf('SUCCESS') !== -1) {
+                    callback(true);
+                } else {
+                    callback(false);
+                }
+            });
         }
         
-        function tryExecCommandExec(cmd, callback) {
-            if (typeof execCommand === 'function') {
-                execCommand(cmd, function() {
-                    callback(true);
-                });
-            } else {
+        function tryExecCommandAdd(path, callback) {
+            if (typeof execCommand !== 'function') {
                 callback(false);
+                return;
             }
+            execCommand('sh ' + CONFIG_SCRIPT + ' add "' + path + '"', function(result) {
+                if (result && result.indexOf('SUCCESS') !== -1) {
+                    callback(true);
+                } else {
+                    callback(false);
+                }
+            });
+        }
+        
+        function tryHttpAdd(path, callback) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '../config.sh', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200 && xhr.responseText && xhr.responseText.indexOf('SUCCESS') !== -1) {
+                        callback(true);
+                    } else {
+                        callback(false);
+                    }
+                }
+            };
+            xhr.onerror = function() {
+                callback(false);
+            };
+            xhr.send('action=add&path=' + encodeURIComponent(path));
         }
         
         function removePath(path) {
             if (!confirm('确定要移除 ' + path + ' ?')) return;
             
-            var cmd = 'sed -i "\\|^' + path + '$|d" ' + CONFIG_FILE;
+            var methods = [
+                function(cb) { tryKsuevalRemove(path, cb); },
+                function(cb) { tryExecCommandRemove(path, cb); },
+                function(cb) { tryHttpRemove(path, cb); }
+            ];
             
-            tryKsuevalExec(cmd, function(success) {
-                if (success) {
-                    alert('路径已移除');
-                    loadPaths();
+            tryNextMethodWithPath(methods, 0, path, null);
+        }
+        
+        function tryKsuevalRemove(path, callback) {
+            if (typeof ksueval !== 'function') {
+                callback(false);
+                return;
+            }
+            ksueval('sh ' + CONFIG_SCRIPT + ' remove "' + path + '"', function(result) {
+                if (result && result.indexOf('SUCCESS') !== -1) {
+                    callback(true);
                 } else {
-                    tryExecCommandExec(cmd, function(success2) {
-                        if (success2) {
-                            alert('路径已移除');
-                            loadPaths();
-                        } else {
-                            alert('请手动编辑配置文件:\n' + CONFIG_FILE);
-                        }
-                    });
+                    callback(false);
                 }
             });
+        }
+        
+        function tryExecCommandRemove(path, callback) {
+            if (typeof execCommand !== 'function') {
+                callback(false);
+                return;
+            }
+            execCommand('sh ' + CONFIG_SCRIPT + ' remove "' + path + '"', function(result) {
+                if (result && result.indexOf('SUCCESS') !== -1) {
+                    callback(true);
+                } else {
+                    callback(false);
+                }
+            });
+        }
+        
+        function tryHttpRemove(path, callback) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '../config.sh', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200 && xhr.responseText && xhr.responseText.indexOf('SUCCESS') !== -1) {
+                        callback(true);
+                    } else {
+                        callback(false);
+                    }
+                }
+            };
+            xhr.onerror = function() {
+                callback(false);
+            };
+            xhr.send('action=remove&path=' + encodeURIComponent(path));
         }
         
         function rebootDevice() {
@@ -296,18 +381,18 @@
             } else if (typeof execCommand === 'function') {
                 execCommand('reboot', function() {});
             } else {
-                alert('请手动重启设备');
+                showToast('请手动重启设备', 'error');
             }
         }
         
         document.getElementById('addForm').addEventListener('submit', addPath);
         document.getElementById('refreshBtn').addEventListener('click', function() {
             loadPaths();
-            alert('状态已刷新');
+            showToast('状态已刷新', 'success');
         });
         document.getElementById('rebootBtn').addEventListener('click', rebootDevice);
         
-        document.getElementById('moduleVersion').textContent = 'v1.3';
+        document.getElementById('moduleVersion').textContent = 'v1.5';
         
         loadPaths();
     </script>
