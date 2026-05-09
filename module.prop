@@ -1,7 +1,7 @@
 id=soterservice_hider
 name=SoterService Hider
-version=1.1
-versionCode=2
+version=1.2
+versionCode=3
 author=Trae
 description=Hide /system_ext/app/SoterService for SafetyNet/Play Integrity - Universal version compatible with all Magisk
 support=https://github.com/wang-tin/soterservice-hider
