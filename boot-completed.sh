@@ -14,21 +14,27 @@ hide_path() {
         return 1
     fi
     
+    if mount 2>/dev/null | grep -q "$target"; then
+        return 0
+    fi
+    
     if [ -d "$target" ]; then
         mount -o bind "$EMPTY_DIR" "$target" 2>/dev/null
         if mount 2>/dev/null | grep -q "$target"; then
-            echo "[SoterHider] Hidden directory: $target"
+            echo "[SoterHider] BootCompleted: Hidden directory: $target"
             return 0
         fi
     elif [ -f "$target" ]; then
         mount -o bind /dev/null "$target" 2>/dev/null
         if mount 2>/dev/null | grep -q "$target"; then
-            echo "[SoterHider] Hidden file: $target"
+            echo "[SoterHider] BootCompleted: Hidden file: $target"
             return 0
         fi
     fi
     return 1
 }
+
+sleep 10
 
 if [ -f "$CONFIG_FILE" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
