@@ -3,6 +3,8 @@
 MODDIR=${0%/*}
 CONFIG_FILE="$MODDIR/sus_path.txt"
 
+chmod 644 "$CONFIG_FILE" 2>/dev/null
+
 add_path() {
     local new_path="$1"
     
@@ -22,6 +24,7 @@ add_path() {
     fi
     
     echo "$new_path" >> "$CONFIG_FILE"
+    chmod 644 "$CONFIG_FILE"
     echo "SUCCESS: Added $new_path"
     return 0
 }
@@ -34,13 +37,18 @@ remove_path() {
         return 1
     fi
     
-    sed -i "\|^$target_path$|d" "$CONFIG_FILE"
+    sed -i "\|^$target_path$|d" "$CONFIG_FILE" 2>/dev/null || true
+    chmod 644 "$CONFIG_FILE"
     echo "SUCCESS: Removed $target_path"
     return 0
 }
 
 list_paths() {
-    grep -v '^#' "$CONFIG_FILE" | grep -v '^$' | awk '{print $1}'
+    if [ -f "$CONFIG_FILE" ]; then
+        grep -v '^#' "$CONFIG_FILE" 2>/dev/null | grep -v '^$' 2>/dev/null | awk '{print $1}'
+    else
+        echo "/system_ext/app/SoterService"
+    fi
 }
 
 case "$1" in

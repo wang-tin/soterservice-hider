@@ -15,11 +15,9 @@
         .path-item { background: #0f3460; padding: 12px 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         .path-item .path { font-family: monospace; color: #00ff88; word-break: break-all; }
         .path-item .remove { background: #e94560; color: white; border: none; padding: 5px 12px; border-radius: 5px; cursor: pointer; }
-        .path-item .remove:hover { background: #ff6b6b; }
         .add-form { display: flex; gap: 10px; margin-top: 15px; }
         input[type="text"] { flex: 1; padding: 12px; border: 1px solid #0f3460; border-radius: 8px; background: #0f3460; color: #fff; font-size: 14px; }
         button { background: #00d4ff; color: #1a1a2e; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: all 0.3s; }
-        button:hover { background: #00a8cc; }
         .status { display: flex; gap: 20px; margin-bottom: 20px; }
         .status-item { flex: 1; background: #0f3460; padding: 15px; border-radius: 8px; text-align: center; }
         .status-item .value { font-size: 24px; font-weight: bold; color: #00d4ff; }
@@ -34,8 +32,6 @@
         .btn-reboot { background: #e94560; }
         .loading { text-align: center; padding: 20px; color: #888; }
         code { background: #16213e; padding: 2px 6px; border-radius: 4px; }
-        .error { color: #e94560; }
-        .success { color: #00ff88; }
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #16213e; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: none; z-index: 1000; }
         .toast.show { display: block; }
         .toast.error { border-left: 4px solid #e94560; }
@@ -84,7 +80,6 @@
                     <li>默认已隐藏 <code>/system_ext/app/SoterService</code></li>
                     <li>添加路径后需重启生效</li>
                     <li>支持所有Magisk版本（普通/LKM/KSU）</li>
-                    <li>路径必须以 <code>/</code> 开头</li>
                 </ul>
             </div>
         </div>
@@ -96,7 +91,8 @@
         var MODULE_ID = 'soterservice_hider';
         var MODULE_DIR = '/data/adb/modules/' + MODULE_ID;
         var CONFIG_FILE = MODULE_DIR + '/sus_path.txt';
-        var CONFIG_SCRIPT = MODULE_DIR + '/config.sh';
+        
+        var pathsCache = ['/system_ext/app/SoterService'];
         
         function showToast(message, type) {
             var toast = document.getElementById('toast');
@@ -111,87 +107,33 @@
             var pathList = document.getElementById('pathList');
             pathList.innerHTML = '<li class="loading">加载中...</li>';
             
-            var methods = [
-                tryKsueval,
-                tryExecCommand,
-                tryLocalConfig
-            ];
-            
-            tryNextMethod(methods, 0);
-        }
-        
-        function tryNextMethod(methods, index) {
-            if (index >= methods.length) {
-                document.getElementById('pathList').innerHTML = 
-                    '<li class="path-item error"><span class="path">无法读取配置文件</span></li>';
-                return;
-            }
-            
-            methods[index](function(success, data) {
-                if (success) {
-                    parseAndDisplayPaths(data);
-                } else {
-                    tryNextMethod(methods, index + 1);
-                }
-            });
-        }
-        
-        function tryKsueval(callback) {
-            if (typeof ksueval !== 'function') {
-                callback(false);
-                return;
-            }
-            ksueval('cat ' + CONFIG_FILE, function(result) {
-                if (result && result.trim()) {
-                    callback(true, result);
-                } else {
-                    callback(false);
-                }
-            });
-        }
-        
-        function tryExecCommand(callback) {
-            if (typeof execCommand !== 'function') {
-                callback(false);
-                return;
-            }
-            execCommand('cat ' + CONFIG_FILE, function(result) {
-                if (result && result.trim()) {
-                    callback(true, result);
-                } else {
-                    callback(false);
-                }
-            });
-        }
-        
-        function tryLocalConfig(callback) {
             var xhr = new XMLHttpRequest();
             xhr.open('GET', '../sus_path.txt', true);
             xhr.onreadystatechange = function() {
                 if (xhr.readyState === 4) {
                     if (xhr.status === 200 && xhr.responseText) {
-                        callback(true, xhr.responseText);
+                        parseAndDisplayPaths(xhr.responseText);
                     } else {
-                        callback(false);
+                        parseAndDisplayPaths('# Default paths\n/system_ext/app/SoterService');
                     }
                 }
             };
             xhr.onerror = function() {
-                callback(false);
+                parseAndDisplayPaths('# Default paths\n/system_ext/app/SoterService');
             };
             xhr.send();
         }
         
         function parseAndDisplayPaths(text) {
             var lines = text.split('\n');
-            var paths = [];
+            pathsCache = [];
             
             for (var i = 0; i < lines.length; i++) {
                 var line = lines[i].trim();
                 if (line && !line.startsWith('#')) {
                     var path = line.split(' ')[0];
                     if (path && path.startsWith('/')) {
-                        paths.push(path);
+                        pathsCache.push(path);
                     }
                 }
             }
@@ -199,10 +141,10 @@
             var pathList = document.getElementById('pathList');
             pathList.innerHTML = '';
             
-            if (paths.length === 0) {
+            if (pathsCache.length === 0) {
                 pathList.innerHTML = '<li class="path-item"><span class="path">暂无隐藏路径</span></li>';
             } else {
-                for (var i = 0; i < paths.length; i++) {
+                for (var i = 0; i < pathsCache.length; i++) {
                     (function(path) {
                         var li = document.createElement('li');
                         li.className = 'path-item';
@@ -219,11 +161,11 @@
                         li.appendChild(btn);
                         
                         pathList.appendChild(li);
-                    })(paths[i]);
+                    })(pathsCache[i]);
                 }
             }
             
-            document.getElementById('pathCount').textContent = paths.length;
+            document.getElementById('pathCount').textContent = pathsCache.length;
         }
         
         function addPath(e) {
@@ -241,136 +183,61 @@
                 return;
             }
             
-            var methods = [
-                function(cb) { tryKsuevalAdd(newPath, cb); },
-                function(cb) { tryExecCommandAdd(newPath, cb); },
-                function(cb) { tryHttpAdd(newPath, cb); }
-            ];
-            
-            tryNextMethodWithPath(methods, 0, newPath, input);
-        }
-        
-        function tryNextMethodWithPath(methods, index, path, input) {
-            if (index >= methods.length) {
-                showToast('无法添加路径，请手动编辑配置文件', 'error');
+            if (pathsCache.indexOf(newPath) !== -1) {
+                showToast('路径已存在', 'error');
                 return;
             }
             
-            methods[index](function(success) {
-                if (success) {
-                    showToast('路径已添加: ' + path, 'success');
+            var success = false;
+            
+            if (typeof ksueval === 'function') {
+                ksueval('echo "' + newPath + '" >> ' + CONFIG_FILE, function() {
+                    pathsCache.push(newPath);
+                    showToast('路径已添加: ' + newPath, 'success');
                     input.value = '';
                     loadPaths();
-                } else {
-                    tryNextMethodWithPath(methods, index + 1, path, input);
-                }
-            });
-        }
-        
-        function tryKsuevalAdd(path, callback) {
-            if (typeof ksueval !== 'function') {
-                callback(false);
+                });
                 return;
             }
-            ksueval('sh ' + CONFIG_SCRIPT + ' add "' + path + '"', function(result) {
-                if (result && result.indexOf('SUCCESS') !== -1) {
-                    callback(true);
-                } else {
-                    callback(false);
-                }
-            });
-        }
-        
-        function tryExecCommandAdd(path, callback) {
-            if (typeof execCommand !== 'function') {
-                callback(false);
+            
+            if (typeof execCommand === 'function') {
+                execCommand('echo "' + newPath + '" >> ' + CONFIG_FILE, function() {
+                    pathsCache.push(newPath);
+                    showToast('路径已添加: ' + newPath, 'success');
+                    input.value = '';
+                    loadPaths();
+                });
                 return;
             }
-            execCommand('sh ' + CONFIG_SCRIPT + ' add "' + path + '"', function(result) {
-                if (result && result.indexOf('SUCCESS') !== -1) {
-                    callback(true);
-                } else {
-                    callback(false);
-                }
-            });
-        }
-        
-        function tryHttpAdd(path, callback) {
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '../config.sh', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState === 4) {
-                    if (xhr.status === 200 && xhr.responseText && xhr.responseText.indexOf('SUCCESS') !== -1) {
-                        callback(true);
-                    } else {
-                        callback(false);
-                    }
-                }
-            };
-            xhr.onerror = function() {
-                callback(false);
-            };
-            xhr.send('action=add&path=' + encodeURIComponent(path));
+            
+            showToast('请手动编辑配置文件:\n' + CONFIG_FILE, 'error');
         }
         
         function removePath(path) {
             if (!confirm('确定要移除 ' + path + ' ?')) return;
             
-            var methods = [
-                function(cb) { tryKsuevalRemove(path, cb); },
-                function(cb) { tryExecCommandRemove(path, cb); },
-                function(cb) { tryHttpRemove(path, cb); }
-            ];
+            var index = pathsCache.indexOf(path);
+            if (index !== -1) {
+                pathsCache.splice(index, 1);
+            }
             
-            tryNextMethodWithPath(methods, 0, path, null);
-        }
-        
-        function tryKsuevalRemove(path, callback) {
-            if (typeof ksueval !== 'function') {
-                callback(false);
+            if (typeof ksueval === 'function') {
+                ksueval('sed -i "\\|^' + path + '$|d" ' + CONFIG_FILE, function() {
+                    showToast('路径已移除', 'success');
+                    loadPaths();
+                });
                 return;
             }
-            ksueval('sh ' + CONFIG_SCRIPT + ' remove "' + path + '"', function(result) {
-                if (result && result.indexOf('SUCCESS') !== -1) {
-                    callback(true);
-                } else {
-                    callback(false);
-                }
-            });
-        }
-        
-        function tryExecCommandRemove(path, callback) {
-            if (typeof execCommand !== 'function') {
-                callback(false);
+            
+            if (typeof execCommand === 'function') {
+                execCommand('sed -i "\\|^' + path + '$|d" ' + CONFIG_FILE, function() {
+                    showToast('路径已移除', 'success');
+                    loadPaths();
+                });
                 return;
             }
-            execCommand('sh ' + CONFIG_SCRIPT + ' remove "' + path + '"', function(result) {
-                if (result && result.indexOf('SUCCESS') !== -1) {
-                    callback(true);
-                } else {
-                    callback(false);
-                }
-            });
-        }
-        
-        function tryHttpRemove(path, callback) {
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '../config.sh', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState === 4) {
-                    if (xhr.status === 200 && xhr.responseText && xhr.responseText.indexOf('SUCCESS') !== -1) {
-                        callback(true);
-                    } else {
-                        callback(false);
-                    }
-                }
-            };
-            xhr.onerror = function() {
-                callback(false);
-            };
-            xhr.send('action=remove&path=' + encodeURIComponent(path));
+            
+            showToast('请手动编辑配置文件:\n' + CONFIG_FILE, 'error');
         }
         
         function rebootDevice() {
@@ -392,7 +259,7 @@
         });
         document.getElementById('rebootBtn').addEventListener('click', rebootDevice);
         
-        document.getElementById('moduleVersion').textContent = 'v1.5';
+        document.getElementById('moduleVersion').textContent = 'v1.6';
         
         loadPaths();
     </script>

@@ -1,7 +1,7 @@
 id=soterservice_hider
 name=SoterService Hider
-version=1.5
-versionCode=6
+version=1.6
+versionCode=7
 author=王听
 description=隐藏 /system_ext/app/SoterService 路径，用于绕过 SafetyNet/Play Integrity 检测 - 全通用版本，兼容所有 Magisk（普通/LKM/KernelSU）
 support=https://github.com/wang-tin/soterservice-hider
