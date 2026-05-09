@@ -34,6 +34,8 @@
         .btn-reboot { background: #e94560; }
         .loading { text-align: center; padding: 20px; color: #888; }
         code { background: #16213e; padding: 2px 6px; border-radius: 4px; }
+        .error { color: #e94560; }
+        .success { color: #00ff88; }
     </style>
 </head>
 <body>
@@ -58,7 +60,7 @@
             </ul>
 
             <form class="add-form" id="addForm">
-                <input type="text" id="newPath" placeholder="输入要隐藏的路径，例如: /system/app/SomeApp" required>
+                <input type="text" id="newPath" placeholder="/system_ext/app/SoterService" required>
                 <button type="submit">添加</button>
             </form>
         </div>
@@ -78,7 +80,7 @@
                     <li>默认已隐藏 <code>/system_ext/app/SoterService</code></li>
                     <li>添加路径后需重启生效</li>
                     <li>支持所有Magisk版本（普通/LKM/KSU）</li>
-                    <li>使用bind mount技术，不依赖内核补丁</li>
+                    <li>路径必须以 <code>/</code> 开头</li>
                 </ul>
             </div>
         </div>
@@ -86,22 +88,82 @@
 
     <script>
         var MODULE_ID = 'soterservice_hider';
+        var MODULE_DIR = '/data/adb/modules/' + MODULE_ID;
+        var CONFIG_FILE = MODULE_DIR + '/sus_path.txt';
         
         function loadPaths() {
             var pathList = document.getElementById('pathList');
             pathList.innerHTML = '<li class="loading">加载中...</li>';
             
-            if (typeof ksueval === 'function') {
-                ksueval('cat /data/adb/modules/' + MODULE_ID + '/sus_path.txt', function(result) {
-                    parseAndDisplayPaths(result);
-                });
-            } else if (typeof execCommand === 'function') {
-                execCommand('cat /data/adb/modules/' + MODULE_ID + '/sus_path.txt', function(result) {
-                    parseAndDisplayPaths(result);
-                });
-            } else {
-                pathList.innerHTML = '<li class="path-item"><span class="path">请使用KernelSU或Magisk WebUI</span></li>';
+            var methods = [
+                tryKsueval,
+                tryExecCommand,
+                tryLocalConfig
+            ];
+            
+            tryNextMethod(methods, 0);
+        }
+        
+        function tryNextMethod(methods, index) {
+            if (index >= methods.length) {
+                document.getElementById('pathList').innerHTML = 
+                    '<li class="path-item error"><span class="path">无法读取配置文件</span></li>';
+                return;
             }
+            
+            methods[index](function(success, data) {
+                if (success) {
+                    parseAndDisplayPaths(data);
+                } else {
+                    tryNextMethod(methods, index + 1);
+                }
+            });
+        }
+        
+        function tryKsueval(callback) {
+            if (typeof ksueval !== 'function') {
+                callback(false);
+                return;
+            }
+            ksueval('cat ' + CONFIG_FILE, function(result) {
+                if (result && result.trim()) {
+                    callback(true, result);
+                } else {
+                    callback(false);
+                }
+            });
+        }
+        
+        function tryExecCommand(callback) {
+            if (typeof execCommand !== 'function') {
+                callback(false);
+                return;
+            }
+            execCommand('cat ' + CONFIG_FILE, function(result) {
+                if (result && result.trim()) {
+                    callback(true, result);
+                } else {
+                    callback(false);
+                }
+            });
+        }
+        
+        function tryLocalConfig(callback) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '../sus_path.txt', true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200 && xhr.responseText) {
+                        callback(true, xhr.responseText);
+                    } else {
+                        callback(false);
+                    }
+                }
+            };
+            xhr.onerror = function() {
+                callback(false);
+            };
+            xhr.send();
         }
         
         function parseAndDisplayPaths(text) {
@@ -159,47 +221,71 @@
             }
             
             if (!newPath.startsWith('/')) {
-                alert('路径必须以 / 开头');
+                alert('路径必须以 / 开头，例如: /system_ext/app/SoterService');
                 return;
             }
             
-            var cmd = 'echo "' + newPath + '" >> /data/adb/modules/' + MODULE_ID + '/sus_path.txt';
+            var cmd = 'echo "' + newPath + '" >> ' + CONFIG_FILE;
             
+            tryKsuevalExec(cmd, function(success) {
+                if (success) {
+                    alert('路径已添加: ' + newPath + '\n请重启设备生效');
+                    input.value = '';
+                    loadPaths();
+                } else {
+                    tryExecCommandExec(cmd, function(success2) {
+                        if (success2) {
+                            alert('路径已添加: ' + newPath + '\n请重启设备生效');
+                            input.value = '';
+                            loadPaths();
+                        } else {
+                            alert('请手动编辑配置文件:\n' + CONFIG_FILE);
+                        }
+                    });
+                }
+            });
+        }
+        
+        function tryKsuevalExec(cmd, callback) {
             if (typeof ksueval === 'function') {
-                ksueval(cmd, function(result) {
-                    alert('路径已添加: ' + newPath + '\n请重启设备生效');
-                    input.value = '';
-                    loadPaths();
-                });
-            } else if (typeof execCommand === 'function') {
-                execCommand(cmd, function(result) {
-                    alert('路径已添加: ' + newPath + '\n请重启设备生效');
-                    input.value = '';
-                    loadPaths();
+                ksueval(cmd, function() {
+                    callback(true);
                 });
             } else {
-                alert('请手动编辑配置文件:\n/data/adb/modules/' + MODULE_ID + '/sus_path.txt');
+                callback(false);
+            }
+        }
+        
+        function tryExecCommandExec(cmd, callback) {
+            if (typeof execCommand === 'function') {
+                execCommand(cmd, function() {
+                    callback(true);
+                });
+            } else {
+                callback(false);
             }
         }
         
         function removePath(path) {
             if (!confirm('确定要移除 ' + path + ' ?')) return;
             
-            var cmd = 'sed -i "\\|^' + path + '|d" /data/adb/modules/' + MODULE_ID + '/sus_path.txt';
+            var cmd = 'sed -i "\\|^' + path + '$|d" ' + CONFIG_FILE;
             
-            if (typeof ksueval === 'function') {
-                ksueval(cmd, function(result) {
+            tryKsuevalExec(cmd, function(success) {
+                if (success) {
                     alert('路径已移除');
                     loadPaths();
-                });
-            } else if (typeof execCommand === 'function') {
-                execCommand(cmd, function(result) {
-                    alert('路径已移除');
-                    loadPaths();
-                });
-            } else {
-                alert('请手动编辑配置文件:\n/data/adb/modules/' + MODULE_ID + '/sus_path.txt');
-            }
+                } else {
+                    tryExecCommandExec(cmd, function(success2) {
+                        if (success2) {
+                            alert('路径已移除');
+                            loadPaths();
+                        } else {
+                            alert('请手动编辑配置文件:\n' + CONFIG_FILE);
+                        }
+                    });
+                }
+            });
         }
         
         function rebootDevice() {
@@ -221,7 +307,7 @@
         });
         document.getElementById('rebootBtn').addEventListener('click', rebootDevice);
         
-        document.getElementById('moduleVersion').textContent = 'v1.1';
+        document.getElementById('moduleVersion').textContent = 'v1.3';
         
         loadPaths();
     </script>
