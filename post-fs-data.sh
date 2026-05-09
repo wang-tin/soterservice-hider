@@ -8,6 +8,9 @@ LOG_FILE="/data/adb/soter_hider.log"
 mkdir -p "$EMPTY_DIR"
 chmod 755 "$EMPTY_DIR"
 
+touch "$LOG_FILE" 2>/dev/null
+chmod 644 "$LOG_FILE" 2>/dev/null
+
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
@@ -20,18 +23,26 @@ hide_path() {
     local target="$1"
     local retries="${2:-3}"
     local delay="${3:-1}"
+    local attempt=0
     
-    for i in $(seq 1 "$retries"); do
+    while [ $attempt -lt $retries ]; do
         if [ -e "$target" ] || [ -L "$target" ]; then
             break
         fi
-        sleep "$delay"
+        attempt=$((attempt + 1))
+        [ $attempt -lt $retries ] && sleep "$delay"
     done
     
     if [ ! -e "$target" ] && [ ! -L "$target" ]; then
         log "Path not exists: $target"
         echo "[SoterHider] Path not exists: $target"
         return 1
+    fi
+    
+    if mount | grep -q " $target "; then
+        log "Already hidden: $target"
+        echo "[SoterHider] Already hidden: $target"
+        return 0
     fi
     
     local mount_result=1
@@ -47,7 +58,7 @@ hide_path() {
             rmdir /tmp/soter_hide_$$ 2>/dev/null
         fi
         
-        if [ $mount_result -eq 0 ] && mount | grep -q "$target"; then
+        if [ $mount_result -eq 0 ] && mount | grep -q " $target "; then
             log "Successfully hidden directory: $target"
             echo "[SoterHider] Hidden directory: $target"
             return 0
@@ -56,7 +67,7 @@ hide_path() {
         mount -o bind /dev/null "$target" 2>/dev/null
         mount_result=$?
         
-        if [ $mount_result -eq 0 ] && mount | grep -q "$target"; then
+        if [ $mount_result -eq 0 ] && mount | grep -q " $target "; then
             log "Successfully hidden file: $target"
             echo "[SoterHider] Hidden file: $target"
             return 0
@@ -76,16 +87,11 @@ if [ -f "$CONFIG_FILE" ]; then
             ""|\#*) continue ;;
         esac
         
-        target_path="${line%% *}"
-        retry_count="${line#* }"
-        
-        if [ "$retry_count" = "$target_path" ]; then
-            retry_count=3
-        fi
+        target_path=$(echo "$line" | awk '{print $1}')
         
         if [ -n "$target_path" ] && [ "${target_path:0:1}" = "/" ]; then
-            log "Processing path: $target_path (retries: $retry_count)"
-            hide_path "$target_path" "$retry_count"
+            log "Processing path: $target_path"
+            hide_path "$target_path"
         fi
     done < "$CONFIG_FILE"
 else

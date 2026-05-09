@@ -188,8 +188,6 @@
                 return;
             }
             
-            var success = false;
-            
             if (typeof ksueval === 'function') {
                 ksueval('echo "' + newPath + '" >> ' + CONFIG_FILE, function() {
                     pathsCache.push(newPath);
@@ -222,7 +220,7 @@
             }
             
             if (typeof ksueval === 'function') {
-                ksueval('sed -i "\\|^' + path + '$|d" ' + CONFIG_FILE, function() {
+                ksueval('sed -i "\\' + '|^' + path + '$|d" ' + CONFIG_FILE, function() {
                     showToast('路径已移除', 'success');
                     loadPaths();
                 });
@@ -230,7 +228,7 @@
             }
             
             if (typeof execCommand === 'function') {
-                execCommand('sed -i "\\|^' + path + '$|d" ' + CONFIG_FILE, function() {
+                execCommand('sed -i "\\' + '|^' + path + '$|d" ' + CONFIG_FILE, function() {
                     showToast('路径已移除', 'success');
                     loadPaths();
                 });
@@ -259,7 +257,7 @@
         });
         document.getElementById('rebootBtn').addEventListener('click', rebootDevice);
         
-        document.getElementById('moduleVersion').textContent = 'v1.8';
+        document.getElementById('moduleVersion').textContent = 'v1.9';
         
         loadPaths();
     </script>
