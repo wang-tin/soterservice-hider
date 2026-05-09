@@ -1,6 +1,6 @@
 {
-  "version": "1.0",
-  "versionCode": 1,
-  "zipUrl": "https://github.com/wang-tin/wangting/releases/download/v1.0/soterservice_hider.zip",
-  "changelog": "Initial release - Hide SoterService paths"
+  "version": "1.7",
+  "versionCode": 8,
+  "zipUrl": "https://github.com/wang-tin/soterservice-hider/releases/download/v1.7/soterservice_hider.zip",
+  "changelog": "v1.7 - Improved path hiding mechanism\n- Added SELinux support\n- Multiple bind mount fallback methods\n- Retry mechanism for path hiding"
 }
